@@ -165,6 +165,7 @@ namespace System.IdentityModel.Tokens.Jwt
             else
                 Typ = tokenType;
 
+            Cty = JwtConstants.HeaderType;
             EncryptingCredentials = encryptingCredentials;
         }
 
