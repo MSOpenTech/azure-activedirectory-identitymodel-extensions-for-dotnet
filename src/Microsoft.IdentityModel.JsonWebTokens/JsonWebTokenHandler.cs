@@ -40,13 +40,13 @@ using TokenLogMessages = Microsoft.IdentityModel.Tokens.LogMessages;
 namespace Microsoft.IdentityModel.JsonWebTokens
 {
     /// <summary>
-    /// A <see cref="SecurityTokenHandler"/> designed for creating and validating Json Web Tokens. 
+    /// A <see cref="SecurityTokenHandler"/> designed for creating and validating Json Web Tokens.
     /// See: http://tools.ietf.org/html/rfc7519 and http://www.rfc-editor.org/info/rfc7515.
     /// </summary>
     public class JsonWebTokenHandler : TokenHandler
     {
         /// <summary>
-        /// Gets the Base64Url encoded string representation of the following JWT header: 
+        /// Gets the Base64Url encoded string representation of the following JWT header:
         /// { <see cref="JwtHeaderParameterNames.Alg"/>, <see cref="SecurityAlgorithms.None"/> }.
         /// </summary>
         /// <return>The Base64Url encoded string representation of the unsigned JWT header.</return>
@@ -56,10 +56,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// Gets the type of the <see cref="JsonWebToken"/>.
         /// </summary>
         /// <return>The type of <see cref="JsonWebToken"/></return>
-        public Type TokenType
-        {
-            get { return typeof(JsonWebToken); }
-        }
+        public Type TokenType => typeof(JsonWebToken);
 
         /// <summary>
         /// Determines if the string is a well formed Json Web Token (JWT).
@@ -87,13 +84,10 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 return false;
             }
 
-            // Set the maximum number of segments to MaxJwtSegmentCount + 1. This controls the number of splits and allows detecting the number of segments is too large.
-            // For example: "a.b.c.d.e.f.g.h" => [a], [b], [c], [d], [e], [f.g.h]. 6 segments.
-            // If just MaxJwtSegmentCount was used, then [a], [b], [c], [d], [e.f.g.h] would be returned. 5 segments.
-            string[] tokenParts = token.Split(new char[] { '.' }, JwtConstants.MaxJwtSegmentCount + 1);
-            if (tokenParts.Length == JwtConstants.JwsSegmentCount)
+            int tokenPartsCount = CountTokenJwtSegments(token);
+            if (tokenPartsCount == JwtConstants.JwsSegmentCount)
                 return JwtTokenUtilities.RegexJws.IsMatch(token);
-            else if (tokenParts.Length == JwtConstants.JweSegmentCount)
+            else if (tokenPartsCount == JwtConstants.JweSegmentCount)
                 return JwtTokenUtilities.RegexJwe.IsMatch(token);
 
             LogHelper.LogInformation(LogMessages.IDX14107);
@@ -104,9 +98,21 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// Returns a value that indicates if this handler can validate a <see cref="SecurityToken"/>.
         /// </summary>
         /// <returns>'true', indicating this instance can validate a <see cref="JsonWebToken"/>.</returns>
-        public virtual bool CanValidateToken
+        public virtual bool CanValidateToken => true;
+
+        private static int CountTokenJwtSegments(string token)
         {
-            get { return true; }
+            int tokenPartsCount = 1;
+            for (int i = 0; i < token.Length; i++)
+            {
+                if (token[i] == '.')
+                {
+                    tokenPartsCount++;
+                    if (tokenPartsCount > JwtConstants.MaxJwtSegmentCount)
+                        break;
+                }
+            }
+            return tokenPartsCount;
         }
 
         private static JObject CreateDefaultJWEHeader(EncryptingCredentials encryptingCredentials, string compressionAlgorithm, string tokenType)
@@ -131,8 +137,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
         private static JObject CreateDefaultJWSHeader(SigningCredentials signingCredentials, string tokenType)
         {
-            JObject header = null;
-
+            JObject header;
             if (signingCredentials == null)
             {
                 header = new JObject()
@@ -252,7 +257,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 throw LogHelper.LogArgumentNullException(nameof(tokenDescriptor));
 
             if ((tokenDescriptor.Subject == null || !tokenDescriptor.Subject.Claims.Any())
-                && (tokenDescriptor.Claims == null || !tokenDescriptor.Claims.Any()))
+                && (tokenDescriptor.Claims == null || tokenDescriptor.Claims.Count == 0))
                 LogHelper.LogWarning(LogMessages.IDX14114, nameof(SecurityTokenDescriptor), nameof(SecurityTokenDescriptor.Subject), nameof(SecurityTokenDescriptor.Claims));
 
             JObject payload;
@@ -485,7 +490,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             {
                 var now = EpochTime.GetIntDate(DateTime.UtcNow);
                 if (!payload.TryGetValue(JwtRegisteredClaimNames.Exp, out _))
-                    payload.Add(JwtRegisteredClaimNames.Exp, now + TokenLifetimeInMinutes * 60);
+                    payload.Add(JwtRegisteredClaimNames.Exp, now + (TokenLifetimeInMinutes * 60));
 
                 if (!payload.TryGetValue(JwtRegisteredClaimNames.Iat, out _))
                     payload.Add(JwtRegisteredClaimNames.Iat, now);
@@ -584,14 +589,13 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
                     identity.AddClaim(claim);
                 }
-
             }
 
             return identity;
         }
 
         /// <summary>
-        /// Decrypts a JWE and returns the clear text 
+        /// Decrypts a JWE and returns the clear text
         /// </summary>
         /// <param name="jwtToken">the JWE that contains the cypher text.</param>
         /// <param name="validationParameters">contains crypto material.</param>
@@ -714,7 +718,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// </summary>
         /// <param name="innerJwt">A 'JSON Web Token' (JWT) in JWS Compact Serialization Format.</param>
         /// <param name="encryptingCredentials">Defines the security key and algorithm that will be used to encrypt the <paramref name="innerJwt"/>.</param>
-        /// <param name="algorithm">Defines the compression algorithm that will be used to compress the 'innerJwt'.</param>
+        /// <param name="algorithm">Defines the compression algorithm that will be used to compress the <paramref name="innerJwt"/></param>
         /// <param name="additionalHeaderClaims">Defines the dictionary containing any custom header claims that need to be added to the outer JWT token header.</param>
         /// <exception cref="ArgumentNullException">if <paramref name="innerJwt"/> is null or empty.</exception>
         /// <exception cref="ArgumentNullException">if <paramref name="encryptingCredentials"/> is null.</exception>
@@ -750,7 +754,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             if (cryptoProviderFactory == null)
                 throw LogHelper.LogExceptionMessage(new ArgumentException(TokenLogMessages.IDX10620));
 
-            byte[] wrappedKey = null;
+            byte[] wrappedKey;
             SecurityKey securityKey = JwtTokenUtilities.GetSecurityKey(encryptingCredentials,cryptoProviderFactory, out wrappedKey);
 
             using (var encryptionProvider = cryptoProviderFactory.CreateAuthenticatedEncryptionProvider(securityKey, encryptingCredentials.Enc))
@@ -911,9 +915,9 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// </summary>
         /// <param name="token">A 'JSON Web Token' (JWT) in JWS or JWE Compact Serialization Format.</param>
         /// <returns>A <see cref="JsonWebToken"/></returns>
-        /// <exception cref="ArgumentNullException">'token' is null or empty.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="token"/> is null or empty.</exception>
         /// <exception cref="ArgumentException">'token.Length' is greater than <see cref="TokenHandler.MaximumTokenSizeInBytes"/>.</exception>
-        /// <remarks><para>If the 'token' is in JWE Compact Serialization format, only the protected header will be deserialized.</para>
+        /// <remarks><para>If the <paramref name="token"/> is in JWE Compact Serialization format, only the protected header will be deserialized.</para>
         /// This method is unable to decrypt the payload. Use <see cref="ValidateToken(string, TokenValidationParameters)"/>to obtain the payload.</remarks>
         public virtual JsonWebToken ReadJsonWebToken(string token)
         {
@@ -931,7 +935,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// </summary>
         /// <param name="token">A 'JSON Web Token' (JWT) in JWS or JWE Compact Serialization Format.</param>
         /// <returns>A <see cref="JsonWebToken"/></returns>
-        /// <exception cref="ArgumentNullException">'token' is null or empty.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="token"/> is null or empty.</exception>
         /// <exception cref="ArgumentException">'token.Length' is greater than <see cref="TokenHandler.MaximumTokenSizeInBytes"/>.</exception>
         public virtual SecurityToken ReadToken(string token)
         {
@@ -955,13 +959,13 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             if (token.Length > MaximumTokenSizeInBytes)
                 return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(TokenLogMessages.IDX10209, token.Length, MaximumTokenSizeInBytes))), IsValid = false };
 
-            var tokenParts = token.Split(new char[] { '.' }, JwtConstants.MaxJwtSegmentCount + 1);
-            if (tokenParts.Length != JwtConstants.JwsSegmentCount && tokenParts.Length != JwtConstants.JweSegmentCount)
+            int tokenPartsCount = CountTokenJwtSegments(token);
+            if (tokenPartsCount != JwtConstants.JwsSegmentCount && tokenPartsCount != JwtConstants.JweSegmentCount)
                 return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(LogMessages.IDX14111, token))), IsValid = false };
 
             try
             {
-                if (tokenParts.Length == JwtConstants.JweSegmentCount)
+                if (tokenPartsCount == JwtConstants.JweSegmentCount)
                 {
                     var jwtToken = new JsonWebToken(token);
                     var decryptedJwt = DecryptToken(jwtToken, validationParameters);
@@ -1041,7 +1045,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 return validatedJsonWebToken;
             }
 
-            JsonWebToken jwtToken = null;
+            JsonWebToken jwtToken;
 
             if (validationParameters.TokenReader != null)
             {
@@ -1058,7 +1062,6 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 jwtToken = new JsonWebToken(token);
             }
 
-            var encodedBytes = Encoding.UTF8.GetBytes(jwtToken.EncodedHeader + "." + jwtToken.EncodedPayload);
             if (string.IsNullOrEmpty(jwtToken.EncodedSignature))
             {
                 if (validationParameters.RequireSignedTokens)
@@ -1109,6 +1112,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
             if (keys != null)
             {
+                var encodedBytes = GetBytes(Encoding.UTF8, jwtToken.EncodedHeader, (byte)'.', jwtToken.EncodedPayload);
                 foreach (var key in keys)
                 {
                     try
@@ -1127,12 +1131,11 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
                     if (key != null)
                     {
-                        keysAttempted.AppendLine(key.ToString() + " , KeyId: " + key.KeyId);
+                        keysAttempted.Append(key.ToString()).Append(" , KeyId: ").AppendLine(key.KeyId);
                         if (kidExists && !kidMatched && key.KeyId != null)
                             kidMatched = jwtToken.Kid.Equals(key.KeyId, key is X509SecurityKey ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
                     }
                 }
-
             }
 
             if (kidExists)
@@ -1156,6 +1159,15 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 throw LogHelper.LogExceptionMessage(new SecurityTokenSignatureKeyNotFoundException(LogHelper.FormatInvariant(TokenLogMessages.IDX10503, keysAttempted, exceptionStrings, jwtToken)));
 
             throw LogHelper.LogExceptionMessage(new SecurityTokenSignatureKeyNotFoundException(TokenLogMessages.IDX10500));
+        }
+
+        private static byte[] GetBytes(Encoding encoding, string input1, byte separator, string input2)
+        {
+            byte[] output = new byte[encoding.GetByteCount(input1) + encoding.GetByteCount(input2) + 1];
+            int bytesWritten = encoding.GetBytes(input1, 0, input1.Length, output, 0);
+            output[bytesWritten++] = separator;
+            encoding.GetBytes(input2, 0, input2.Length, output, bytesWritten);
+            return output;
         }
 
         /// <summary>
