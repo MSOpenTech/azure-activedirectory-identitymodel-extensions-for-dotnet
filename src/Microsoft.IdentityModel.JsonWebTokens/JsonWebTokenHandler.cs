@@ -84,7 +84,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 return false;
             }
 
-            int tokenPartsCount = CountTokenJwtSegments(token);
+            int tokenPartsCount = CountTokenJwtParts(token);
             if (tokenPartsCount == JwtConstants.JwsSegmentCount)
                 return JwtTokenUtilities.RegexJws.IsMatch(token);
             else if (tokenPartsCount == JwtConstants.JweSegmentCount)
@@ -100,7 +100,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// <returns>'true', indicating this instance can validate a <see cref="JsonWebToken"/>.</returns>
         public virtual bool CanValidateToken => true;
 
-        private static int CountTokenJwtSegments(string token)
+        private static int CountTokenJwtParts(string token)
         {
             int tokenPartsCount = 1;
             for (int i = 0; i < token.Length; i++)
@@ -959,7 +959,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             if (token.Length > MaximumTokenSizeInBytes)
                 return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(TokenLogMessages.IDX10209, token.Length, MaximumTokenSizeInBytes))), IsValid = false };
 
-            int tokenPartsCount = CountTokenJwtSegments(token);
+            int tokenPartsCount = CountTokenJwtParts(token);
             if (tokenPartsCount != JwtConstants.JwsSegmentCount && tokenPartsCount != JwtConstants.JweSegmentCount)
                 return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(LogMessages.IDX14111, token))), IsValid = false };
 
