@@ -84,14 +84,16 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 return false;
             }
 
-            int tokenPartsCount = CountTokenJwtParts(token);
-            if (tokenPartsCount == JwtConstants.JwsSegmentCount)
-                return JwtTokenUtilities.RegexJws.IsMatch(token);
-            else if (tokenPartsCount == JwtConstants.JweSegmentCount)
-                return JwtTokenUtilities.RegexJwe.IsMatch(token);
-
-            LogHelper.LogInformation(LogMessages.IDX14107);
-            return false;
+            switch (JwtTokenUtilities.CountTokenJwtParts(token))
+            {
+                case JwtConstants.JwsSegmentCount:
+                    return JwtTokenUtilities.RegexJws.IsMatch(token);
+                case JwtConstants.JweSegmentCount:
+                    return JwtTokenUtilities.RegexJwe.IsMatch(token);
+                default:
+                    LogHelper.LogInformation(LogMessages.IDX14107);
+                    return false;
+            }
         }
 
         /// <summary>
@@ -99,21 +101,6 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// </summary>
         /// <returns>'true', indicating this instance can validate a <see cref="JsonWebToken"/>.</returns>
         public virtual bool CanValidateToken => true;
-
-        private static int CountTokenJwtParts(string token)
-        {
-            int tokenPartsCount = 1;
-            for (int i = 0; i < token.Length; i++)
-            {
-                if (token[i] == '.')
-                {
-                    tokenPartsCount++;
-                    if (tokenPartsCount > JwtConstants.MaxJwtSegmentCount)
-                        break;
-                }
-            }
-            return tokenPartsCount;
-        }
 
         private static JObject CreateDefaultJWEHeader(EncryptingCredentials encryptingCredentials, string compressionAlgorithm, string tokenType)
         {
@@ -959,31 +946,32 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             if (token.Length > MaximumTokenSizeInBytes)
                 return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(TokenLogMessages.IDX10209, token.Length, MaximumTokenSizeInBytes))), IsValid = false };
 
-            int tokenPartsCount = CountTokenJwtParts(token);
-            if (tokenPartsCount != JwtConstants.JwsSegmentCount && tokenPartsCount != JwtConstants.JweSegmentCount)
-                return new TokenValidationResult { Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(LogMessages.IDX14111, token))), IsValid = false };
-
             try
             {
-                if (tokenPartsCount == JwtConstants.JweSegmentCount)
+                switch (JwtTokenUtilities.CountTokenJwtParts(token))
                 {
-                    var jwtToken = new JsonWebToken(token);
-                    var decryptedJwt = DecryptToken(jwtToken, validationParameters);
-                    var innerToken = ValidateSignature(decryptedJwt, validationParameters);
-                    jwtToken.InnerToken = innerToken;
-                    var innerTokenValidationResult = ValidateTokenPayload(innerToken, validationParameters);
-                    return new TokenValidationResult
-                    {
-                        SecurityToken = jwtToken,
-                        ClaimsIdentity = innerTokenValidationResult.ClaimsIdentity,
-                        IsValid = true,
-                        TokenType = innerTokenValidationResult.TokenType
-                    };
-                }
-                else
-                {
-                    var jsonWebToken = ValidateSignature(token, validationParameters);
-                    return ValidateTokenPayload(jsonWebToken, validationParameters);
+                    case JwtConstants.JweSegmentCount:
+                        var jwtToken = new JsonWebToken(token);
+                        var decryptedJwt = DecryptToken(jwtToken, validationParameters);
+                        var innerToken = ValidateSignature(decryptedJwt, validationParameters);
+                        jwtToken.InnerToken = innerToken;
+                        var innerTokenValidationResult = ValidateTokenPayload(innerToken, validationParameters);
+                        return new TokenValidationResult
+                        {
+                            SecurityToken = jwtToken,
+                            ClaimsIdentity = innerTokenValidationResult.ClaimsIdentity,
+                            IsValid = true,
+                            TokenType = innerTokenValidationResult.TokenType
+                        };
+                    case JwtConstants.JwsSegmentCount:
+                        var jsonWebToken = ValidateSignature(token, validationParameters);
+                        return ValidateTokenPayload(jsonWebToken, validationParameters);
+                    default:
+                        return new TokenValidationResult
+                        {
+                            Exception = LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(LogMessages.IDX14111, token))),
+                            IsValid = false
+                        };
                 }
             }
             catch (Exception ex)
@@ -1112,7 +1100,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
             if (keys != null)
             {
-                var encodedBytes = GetBytes(Encoding.UTF8, jwtToken.EncodedHeader, (byte)'.', jwtToken.EncodedPayload);
+                var encodedBytes = JwtTokenUtilities.GetBytes(Encoding.UTF8, jwtToken.EncodedHeader, (byte)'.', jwtToken.EncodedPayload);
                 foreach (var key in keys)
                 {
                     try
@@ -1159,15 +1147,6 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 throw LogHelper.LogExceptionMessage(new SecurityTokenSignatureKeyNotFoundException(LogHelper.FormatInvariant(TokenLogMessages.IDX10503, keysAttempted, exceptionStrings, jwtToken)));
 
             throw LogHelper.LogExceptionMessage(new SecurityTokenSignatureKeyNotFoundException(TokenLogMessages.IDX10500));
-        }
-
-        private static byte[] GetBytes(Encoding encoding, string input1, byte separator, string input2)
-        {
-            byte[] output = new byte[encoding.GetByteCount(input1) + encoding.GetByteCount(input2) + 1];
-            int bytesWritten = encoding.GetBytes(input1, 0, input1.Length, output, 0);
-            output[bytesWritten++] = separator;
-            encoding.GetBytes(input2, 0, input2.Length, output, bytesWritten);
-            return output;
         }
 
         /// <summary>

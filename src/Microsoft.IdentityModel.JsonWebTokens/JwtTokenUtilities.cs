@@ -48,7 +48,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// Regex that is used to figure out if a token is in JWS format.
         /// </summary>
         public static Regex RegexJws = new Regex(JwtConstants.JsonCompactSerializationRegex, RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        
+
         /// <summary>
         /// Regex that is used to figure out if a token is in JWE format.
         /// </summary>
@@ -64,7 +64,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         };
 
         /// <summary>
-        /// Produces a signature over the 'input'.
+        /// Produces a signature over the <paramref name="input"/>.
         /// </summary>
         /// <param name="input">String to be signed</param>
         /// <param name="signingCredentials">The <see cref="SigningCredentials"/> that contain crypto specs used to sign the token.</param>
@@ -95,13 +95,13 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         }
 
         /// <summary>
-        /// Produces a signature over the 'input'.
+        /// Produces a signature over the <paramref name="input"/>.
         /// </summary>
         /// <param name="input">String to be signed</param>
         /// <param name="signingCredentials">The <see cref="SigningCredentials"/> that contain crypto specs used to sign the token.</param>
         /// <param name="cacheProvider">should the <see cref="SignatureProvider"/> be cached.</param>
         /// <returns>The bse64urlendcoded signature over the bytes obtained from UTF8Encoding.GetBytes( 'input' ).</returns>
-        /// <exception cref="ArgumentNullException">'input' or 'signingCredentials' is null.</exception>
+        /// <exception cref="ArgumentNullException"><paramref name="input"/> or <paramref name="signingCredentials"/> is null.</exception>
         public static string CreateEncodedSignature(string input, SigningCredentials signingCredentials, bool cacheProvider)
         {
             if (input == null)
@@ -279,8 +279,8 @@ namespace Microsoft.IdentityModel.JsonWebTokens
 
         internal static SecurityKey GetSecurityKey(EncryptingCredentials encryptingCredentials, CryptoProviderFactory cryptoProviderFactory, out byte[] wrappedKey)
         {
-            SecurityKey securityKey = null;
-            KeyWrapProvider kwProvider = null;
+            SecurityKey securityKey;
+            KeyWrapProvider kwProvider;
             wrappedKey = null;
 
             // if direct algorithm, look for support
@@ -330,19 +330,17 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                     decryptionKeys.Add(key);
 
             return decryptionKeys;
-
         }
 
-
         /// <summary>
-        /// Gets the DateTime using the number of seconds from 1970-01-01T0:0:0Z (UTC)
+        /// Gets the <see cref="DateTime"/> using the number of seconds from 1970-01-01T0:0:0Z (UTC)
         /// </summary>
         /// <param name="key">Claim in the payload that should map to an integer, float, or string.</param>
         /// <param name="payload">The payload that contains the desired claim value.</param>
-        /// <remarks>If the claim is not found, the function returns: DateTime.MinValue
+        /// <remarks>If the claim is not found, the function returns: <see cref="DateTime.MinValue"/>
         /// </remarks>
         /// <exception cref="FormatException">If the value of the claim cannot be parsed into a long.</exception>
-        /// <returns>The DateTime representation of a claim.</returns>
+        /// <returns>The <see cref="DateTime"/> representation of a claim.</returns>
         internal static DateTime GetDateTime(string key, JObject payload)
         {
             if (!payload.TryGetValue(key, out var jToken))
@@ -382,9 +380,8 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// <remarks>If key fails to resolve, then null is returned</remarks>
         internal static SecurityKey ResolveTokenSigningKey(string kid, string x5t, TokenValidationParameters validationParameters)
         {
-
             if (!string.IsNullOrEmpty(kid))
-            {              
+            {
                 if (validationParameters.IssuerSigningKey != null
                     && string.Equals(validationParameters.IssuerSigningKey.KeyId, kid, validationParameters.IssuerSigningKey is X509SecurityKey ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     return validationParameters.IssuerSigningKey;
@@ -426,6 +423,39 @@ namespace Microsoft.IdentityModel.JsonWebTokens
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Returns number of Jwt parts in token.
+        /// </summary>
+        /// <param name="token">Input token to count patrs.</param>
+        /// <returns>Value between 1 and <see cref="JwtConstants.MaxJwtSegmentCount"/>.</returns>
+        internal static int CountTokenJwtParts(string token)
+        {
+            int tokenPartsCount = 1;
+            for (int i = 0; i < token.Length; i++)
+            {
+                if (token[i] == '.')
+                {
+                    tokenPartsCount++;
+                    if (tokenPartsCount > JwtConstants.MaxJwtSegmentCount)
+                        break;
+                }
+            }
+            return tokenPartsCount;
+        }
+
+        /// <summary>
+        /// No intermediate string allocation equivalent of
+        /// <code>encoding.GetBytes(input1 + separator + input2)</code>
+        /// </summary>
+        internal static byte[] GetBytes(Encoding encoding, string input1, byte separator, string input2)
+        {
+            byte[] output = new byte[encoding.GetByteCount(input1) + encoding.GetByteCount(input2) + 1];
+            int bytesWritten = encoding.GetBytes(input1, 0, input1.Length, output, 0);
+            output[bytesWritten++] = separator;
+            encoding.GetBytes(input2, 0, input2.Length, output, bytesWritten);
+            return output;
         }
     }
 }
