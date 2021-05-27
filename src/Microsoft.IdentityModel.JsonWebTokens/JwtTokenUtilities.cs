@@ -429,7 +429,7 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         /// Returns number of Jwt parts in token.
         /// </summary>
         /// <param name="token">Input token to count patrs.</param>
-        /// <returns>Value between 1 and <see cref="JwtConstants.MaxJwtSegmentCount"/>.</returns>
+        /// <returns>Value between 1 and <see cref="JwtConstants.MaxJwtSegmentCount"/> + 1.</returns>
         internal static int CountTokenJwtParts(string token)
         {
             int tokenPartsCount = 1;
@@ -459,4 +459,3 @@ namespace Microsoft.IdentityModel.JsonWebTokens
         }
     }
 }
-
